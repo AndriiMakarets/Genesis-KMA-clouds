@@ -9,7 +9,7 @@
 ### Usage example:
 
 ## 1. Create VPC
-# [Referance](https://docs.aws.amazon.com/cli/latest/reference/ec2/create-vpc.html)
+# [Reference](https://docs.aws.amazon.com/cli/latest/reference/ec2/create-vpc.html)
 ```
 aws create-vpc --cidr-block 10.10.0.0/18 \ # create vpc with 16384 grey IP adresses
     --no-amazon-provided-ipv6-cidr-block \ # create only IPv4 
