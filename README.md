@@ -4,10 +4,10 @@
 
 ## 1. Create VPC
 ```
-aws ec2 create-vpc --cidr-block 10.10.0.0/18 \
+VPCID=$(aws ec2 create-vpc --cidr-block 10.10.0.0/18 \
                     --no-amazon-provided-ipv6-cidr-block \
                     --query Vpc.VpcId \
-                    --output text
+                    --output text | grep -oP '(?<="VpcId": ")[^"]*')
 ```
 ```
 OUTPUT
@@ -17,9 +17,9 @@ vpc-01f75f4c63fde480e
 
 ## 2. Create subnets, each dedicated to availability zone within region
 ```
- aws ec2 create-subnet --vpc-id="vpc-01f75f4c63fde480e" --cidr-block 10.10.1.0/24
- aws ec2 create-subnet --vpc-id="vpc-01f75f4c63fde480e" --cidr-block 10.10.2.0/24
- aws ec2 create-subnet --vpc-id="vpc-01f75f4c63fde480e" --cidr-block 10.10.3.0/24
+ SUBNETID1=$(aws ec2 create-subnet --vpc-id="$VPCID" --cidr-block 10.10.1.0/24 --availability-zone us-east-1a | grep -oP '(?<="SubnetId": ")[^"]*')
+ SUBNETID2=$(aws ec2 create-subnet --vpc-id="$VPCID" --cidr-block 10.10.2.0/24 --availability-zone us-east-1a | grep -oP '(?<="SubnetId": ")[^"]*')
+ SUBNETID3=$(aws ec2 create-subnet --vpc-id="$VPCID" --cidr-block 10.10.3.0/24 --availability-zone us-east-1a | grep -oP '(?<="SubnetId": ")[^"]*')
 ```
 ```
 OUTPUT
@@ -78,7 +78,7 @@ OUTPUT
 
 # 3. Create Internet Gateway and attach it to vpc
 ```
-aws ec2 create-internet-gateway --query InternetGateway.InternetGatewayId --output text
+IGID=$(aws ec2 create-internet-gateway --query InternetGateway.InternetGatewayId --output text | grep -oP '(?<="InternetGatewayId": ")[^"]*')
 ```
 ```
 OUTPUT 
@@ -86,11 +86,11 @@ igw-00de7ec03e8ab8d2b
 ```
 ## 4. Attach IG to VPC
 ```
-aws ec2 attach-internet-gateway --internet-gateway-id igw-00de7ec03e8ab8d2b --vpc-id vpc-01f75f4c63fde480e
+aws ec2 attach-internet-gateway --internet-gateway-id $IGID --vpc-id $VPCID
 ```
 ## 5. AWS Security group
 ```
-aws ec2 describe-security-groups --filters "Name=vpc-id,Values=vpc-01f75f4c63fde480e"
+aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPCID" 
 ```
 ```
 OUTPUT
@@ -134,10 +134,10 @@ OUTPUT
 }
 ```
 ```
-aws ec2 create-security-group \
+SGID=$(aws ec2 create-security-group \
     --group-name KmaGenesisSecurityGroup \
     --description "Sone description" \
-    --vpc-id vpc-01f75f4c63fde480e
+    --vpc-id $VPCID | grep -oP '(?<="GroupId": ")[^"]*')
    ```
    
    ``` 
@@ -149,12 +149,12 @@ aws ec2 create-security-group \
 
 ## 6. Add to your EC2 instance Security groups, that allows connection to TCP ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
 ```
-aws ec2 authorize-security-group-ingress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 22 --source-group sg-0b39f67dfc85d58a4
-aws ec2 authorize-security-group-ingress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 80 --source-group sg-0b39f67dfc85d58a4
-aws ec2 authorize-security-group-ingress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 443--source-group sg-0b39f67dfc85d58a4
-aws ec2 authorize-security-group-egress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 80 --source-group sg-0b39f67dfc85d58a4
-aws ec2 authorize-security-group-egress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 22 --source-group sg-0b39f67dfc85d58a4
-aws ec2 authorize-security-group-egress --group-id sg-04c6876dc6d4e51e4 --protocol tcp --port 443--source-group sg-0b39f67dfc85d58a4
+aws ec2 authorize-security-group-ingress --group-id $SGID --protocol tcp --port 22
+aws ec2 authorize-security-group-ingress --group-id $SGID --protocol tcp --port 80 
+aws ec2 authorize-security-group-ingress --group-id $SGID --protocol tcp --port 443
+aws ec2 authorize-security-group-egress --group-id $SGID --protocol tcp --port 80 
+aws ec2 authorize-security-group-egress --group-id $SGID --protocol tcp --port 22 
+aws ec2 authorize-security-group-egress --group-id $SGID --protocol tcp --port 443
 ```
   6. Put Application Load Balancer (ALB) as a proxy to your ASG
 ## 7 EC2 instance within ASG based on latest AMI Amazon Linux 2 with 15GiB attached EBS (Elastic block storage)
@@ -181,11 +181,11 @@ OUTPUT
 ```
 # 7.2 Run Instance
 ```
-aws ec2 run-instances --image-id ami-074cce78125f09d61 --instance-type t2.micro  --security-group-ids sg-0b39f67dfc85d58a4 --subnet-id subnet-012c0c99eab51b865
+INSTANCEID=$(aws ec2 run-instances --image-id ami-074cce78125f09d61 --instance-type t2.micro  --security-group-ids $SGID --subnet-id $SUBNETID1 | grep -oP '(?<="InstanceId": ")[^"]*')
 ```
 # 7.3 Volume
 ```
-aws ec2 create-volume     --volume-type gp2  --region eu-central-1 --availability-zone eu-central-1b --size 80
+VOLID=$(aws ec2 create-volume     --volume-type gp2  --region eu-central-1 --availability-zone us-east-1a --size 80 | grep -oP '(?<="VolumeId": ")[^"]*')
 ```
 
 ```
@@ -206,15 +206,15 @@ OUTPUT
 [cloudshell-user@ip-10-0-47-175 ~]$ 
 
 ```
-aws ec2 attach-volume --instance-id i-070b9c16e64d946d1 --volume-id vol-063885461986df8d0 --device a
+aws ec2 attach-volume --instance-id $INSTACEID --volume-id $VOLID --device a
 ```
 ```
 ## 8,9 AWS Autoscaling group (ASG), Load Balancer
 ```
-aws elbv2 create-load-balancer  --name balancer --scheme internal --subnets subnet-012c0c99eab51b865 subnet-05569084d06110663 subnet-0539e8f6d09eb80b1 
+aws elbv2 create-load-balancer  --name balancer --scheme internal --subnets $SUBNETID1 $SUBNETID2 $SUBNETID3
 примітка: підмережі (сабнетс) - мають бути в різних зонах доступу
 ```
-aws autoscaling create-auto-scaling-group --auto-scaling-group-name group --min-size 0 --max-size 3 --instance-id i-070b9c16e64d946d1
+aws autoscaling create-auto-scaling-group --auto-scaling-group-name group --min-size 0 --max-size 3 --instance-id $INSTANCEID
 ```
 aws autoscaling attach-load-balancers --load-balancer-names balancer --auto-scaling-group-name grou
 ```
